@@ -105,7 +105,7 @@ type
     function AddCookies(const ACookies: Tstrings): IRequest;
     function AddCookie(const ACookieName, ACookieValue: string): IRequest;
     function AddParam(const AName, AValue: string): IRequest;
-    function AddField(const AFieldName: string; const AValue: string): IRequest; overload;
+    function AddField(const AFieldName: string; const AValue: string): IRequest;
     function AddFile(const AFieldName: string; const AFileName: string; const AContentType: string = ''): IRequest; overload;
     function AddFile(const AFieldName: string; const AValue: TStream; const AFileName: string = ''; const AContentType: string = ''): IRequest; overload;
     function MakeURL(const AIncludeParams: Boolean = True): string;

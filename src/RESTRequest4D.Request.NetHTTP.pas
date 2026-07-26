@@ -276,7 +276,7 @@ begin
     if (LFileName = EmptyStr) then
       LFileName := AFieldName;
     AValue.Position := 0;
-  {$IF (COMPILERVERSION >= 34.0) and (COMPILERVERSION < 35.0)}
+  {$IF COMPILERVERSION >= 34.0}
     FMultipartFormData.AddStream(AFieldName, AValue, True, LFileName, AContentType);
   {$ELSE}
     FMultipartFormData.AddStream(AFieldName, AValue, LFileName, AContentType);
