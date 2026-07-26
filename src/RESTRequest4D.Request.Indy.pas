@@ -17,6 +17,7 @@ uses RESTRequest4D.Request.Contract, RESTRequest4D.Response.Contract, IdHTTP, Id
 type
   TRequestIndy = class(TInterfacedObject, IRequest)
   private
+    FXWwwFormData: TStringList;
     FIdMultiPartFormDataStream: TIdMultiPartFormDataStream;
     FHeaders: TStrings;
     FParams: TStrings;
@@ -94,7 +95,9 @@ type
     function AddCookies(const ACookies: TStrings): IRequest;
     function AddCookie(const ACookieName, ACookieValue: string): IRequest;
     function AddParam(const AName, AValue: string): IRequest;
-    function AddField(const AFieldName: string; const AValue: string): IRequest; overload;
+    function AddField(const AFieldName: string; const AValue: string): IRequest;
+    function AddFieldFormData(const AFieldName: string; const AValue: string): IRequest;
+    function AddFieldXWwwForm(const AFieldName: string; const AValue: string): IRequest;
     function AddText(const AFieldName: string; const AContent: string; const AContentType: string = ''): IRequest;
     function AddFile(const AFieldName: string; const AFileName: string; const AContentType: string = ''): IRequest; overload;
     function AddFile(const AFieldName: string; const AValue: TStream; const AFileName: string = ''; const AContentType: string = ''): IRequest; overload;
@@ -122,17 +125,27 @@ implementation
 uses RESTRequest4D.Response.Indy, IdURI, IdCookieManager, IdCompressorZLib;
 
 function TRequestIndy.AddField(const AFieldName: string; const AValue: string): IRequest;
-{$IF DEFINED(RR4D_INDY)}
 var
   LField: TIdFormDataField;
-{$ENDIF}
 begin
   Result := Self;
-  {$IF DEFINED(RR4D_INDY)}
-    LField := FIdMultiPartFormDataStream.AddFormField(AFieldName, AValue, '', '');
-    if Assigned(LField) then
-      LField.ContentTransfer := '8bit';
-  {$ENDIF}
+  LField := FIdMultiPartFormDataStream.AddFormField(AFieldName, AValue, '', '');
+  if Assigned(LField) then
+    LField.ContentTransfer := '8bit';
+end;
+
+function TRequestIndy.AddFieldFormData(const AFieldName, AValue: string): IRequest;
+begin
+  Result := Self;
+  FIdMultiPartFormDataStream.AddFormField(AFieldName, AValue, EmptyStr, ' ').ContentTransfer:= '8bit';
+end;
+
+function TRequestIndy.AddFieldXWwwForm(const AFieldName, AValue: string): IRequest;
+begin
+  Result := Self;
+  if not Assigned(FXWwwFormData) then
+    FXWwwFormData := TStringList.Create;
+  FXWwwFormData.Add(Format('%s=%s', [AFieldName, AValue]));
 end;
 
 function TRequestIndy.AddFile(const AFieldName: string; const AFileName: string; const AContentType: string): IRequest;
@@ -140,9 +153,7 @@ begin
   Result := Self;
   if not FileExists(AFileName) then
     Exit;
-  {$IF DEFINED(RR4D_INDY)}
-    FIdMultiPartFormDataStream.AddFile(AFieldName, AFileName, AContentType);
-  {$ENDIF}
+  FIdMultiPartFormDataStream.AddFile(AFieldName, AFileName, AContentType);
 end;
 
 function TRequestIndy.AddFile(const AFieldName: string; const AValue: TStream; const AFileName: string; const AContentType: string): IRequest;
@@ -152,13 +163,11 @@ begin
   Result := Self;
   if not Assigned(AValue) then
     Exit;
-  {$IF DEFINED(RR4D_INDY)}
-    lFileName := Trim(AFileName);
-    if (lFileName = EmptyStr) then
-      lFileName := AFieldName;
-    AValue.Position := 0;
-    FIdMultiPartFormDataStream.AddFormField(AFieldName, AContentType, EmptyStr, AValue, lFileName);
-  {$ENDIF}
+  lFileName := Trim(AFileName);
+  if (lFileName = EmptyStr) then
+    lFileName := AFieldName;
+  AValue.Position := 0;
+  FIdMultiPartFormDataStream.AddFormField(AFieldName, AContentType, EmptyStr, AValue, lFileName);
 end;
 
 function TRequestIndy.AddBody(const AContent: TStream; const AOwns: Boolean): IRequest;
@@ -316,11 +325,9 @@ begin
         mrPOST:
         begin
           if (Assigned(FIdMultiPartFormDataStream) and (FIdMultiPartFormDataStream.Size > 0)) then
-          begin
-            if FIdHTTP.Request.CustomHeaders.IndexOfName('Content-Type') >= 0 then
-              FIdHTTP.Request.CustomHeaders.Delete(FIdHTTP.Request.CustomHeaders.IndexOfName('Content-Type'));
-            FIdHTTP.Post(TIdURI.URLEncode(MakeURL), FIdMultiPartFormDataStream, FStreamResult);
-          end
+            FIdHTTP.Post(TIdURI.URLEncode(MakeURL), FIdMultiPartFormDataStream, FStreamResult)
+          else if Assigned(FXWwwFormData) then
+            FIdHTTP.Post(TIdURI.URLEncode(MakeURL), FXWwwFormData, FStreamResult)
           else
             FIdHTTP.Post(TIdURI.URLEncode(MakeURL), FStreamSend, FStreamResult);
         end;
@@ -328,6 +335,8 @@ begin
         begin
           if (Assigned(FIdMultiPartFormDataStream) and (FIdMultiPartFormDataStream.Size > 0)) then
             raise Exception.Create('Method Put not supported multipart/form-data.')
+          else if Assigned(FXWwwFormData) then
+            raise Exception.Create('Method Put not supported x-www-form-urlencoded.')
           else
             FIdHTTP.Put(TIdURI.URLEncode(MakeURL), FStreamSend, FStreamResult);
         end;
@@ -578,9 +587,7 @@ function TRequestIndy.AddText(const AFieldName, AContent,
   AContentType: string): IRequest;
 begin
   Result := Self;
-  {$IF DEFINED(RR4D_INDY)}
-    FIdMultiPartFormDataStream.AddFormField(AFieldName, AContent, EmptyStr, AContentType).ContentTransfer:= '8bit';
-  {$ENDIF}
+  FIdMultiPartFormDataStream.AddFormField(AFieldName, AContent, EmptyStr, AContentType).ContentTransfer:= '8bit';
 end;
 
 function TRequestIndy.AddUrlSegment(const AName, AValue: string): IRequest;
@@ -801,6 +808,8 @@ begin
   FreeAndNil(FStreamResult);
   if Assigned(FIdMultiPartFormDataStream) then
     FreeAndNil(FIdMultiPartFormDataStream);
+  if Assigned(FXWwwFormData) then
+    FreeAndNil(FXWwwFormData);
   inherited;
 end;
 
